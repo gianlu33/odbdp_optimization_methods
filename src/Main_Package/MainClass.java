@@ -20,7 +20,9 @@ public class MainClass {
 			br = new BufferedReader(new FileReader("given_instances/instance01.odbdp"));
 
 			// prova 
+			// prova 2
 			
+			//prova 3
 			
 			//reading the number of queries (1st row of input)
 			sCurrentLine = br.readLine();
