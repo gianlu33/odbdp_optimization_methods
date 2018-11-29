@@ -19,6 +19,9 @@ public class MainClass {
 		try {
 			br = new BufferedReader(new FileReader("given_instances/instance01.odbdp"));
 
+			// prova 
+			
+			
 			//reading the number of queries (1st row of input)
 			sCurrentLine = br.readLine();
 //			System.out.println(sCurrentLine);
