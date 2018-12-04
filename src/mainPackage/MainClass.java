@@ -9,8 +9,7 @@ public class MainClass {
 		Utils.readData(data, "given_instances/instance01.odbdp");
 		
 		data.printData();
-		
-		
+			
 	}
-
+	
 }
