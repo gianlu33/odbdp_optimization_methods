@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 public class DataStructure {
-	//TODO confermare strutture dati
 	private int nQueries;
 	private int nIndexes;
 	private int nConfigurations;
@@ -106,5 +105,4 @@ public class DataStructure {
 			
 	}
 
-	
 }
