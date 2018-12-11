@@ -104,5 +104,36 @@ public class DataStructure {
 		}
 			
 	}
+	
+	public void printStatistics() {
+		
+		int sumWeight=0, sumCost=0, sumIndexes=0, sumGain=0, sumConfigurations=0;
+		
+		for(int i=0; i<nIndexes; i++) {
+			sumWeight += indexesMemory[i];
+			sumCost += indexesCost[i];
+		}
+		
+		for(ArrayList<Integer> conf : configurationIndexes.values()) {
+			sumIndexes += conf.size();
+		}
+		
+		for(int i=0; i<nConfigurations; i++) {
+			
+			for(int j=0; j<nQueries; j++) {
+				sumGain += configurationQueryGain[i][j];
+				sumConfigurations = configurationQueryGain[i][j] > 0 ? sumConfigurations + 1 : sumConfigurations;
+				
+			}
+		}
+		
+		System.out.println("Indexes: " + nIndexes + " Queries: " + nQueries + " Configurations: " + nConfigurations);
+		System.out.println("Average weight per index: " + (float)sumWeight / nIndexes);
+		System.out.println("Average cost per index: " + (float)sumCost / nIndexes);
+		System.out.println("Average indexes per configuration: " + (float)sumIndexes / nConfigurations);
+		System.out.println("Average gain per query: " + (float)sumGain / nQueries);
+		System.out.println("Average configurations per query: " + (float)sumConfigurations / nQueries);
+	
+	}
 
 }

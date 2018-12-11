@@ -7,121 +7,139 @@ import java.util.Random;
 public class GeneticAlgorithm2 {
 	private DataStructure data;
 	private ArrayList<Solution> population;
+	private ArrayList<Solution> children;
 	int numPopulation;
 	private int bestObjectiveFunction;
-	
-	//methods for combination
-	public static final int CROSSOVER = 0;
-	public static final int MUTATION = 1;
-	public static final int INVERSION = 2;
-	public static final int MIXED = 3;
+	private ArrayList<GAThread> listThreads;
+	float mutationRate; //serve per potenziare la mutation se non trova soluzioni per molte generazioni
+	long timeStart;
 	
 	public GeneticAlgorithm2(DataStructure data, int numPopulation) {
 		this.data = data;
 		this.population = new ArrayList<>();
+		this.children = new ArrayList<>();
 		this.numPopulation = numPopulation;
-		this.bestObjectiveFunction = -1;
+		this.bestObjectiveFunction = Integer.MIN_VALUE;
+		listThreads = new ArrayList<>();
 	}
 	
 	//TODO rivedi bene sti metodi che magari hai scritto cagate
 	
 	/*
 	 * start method
-	 * combinationMethod -> one between CROSSOVER, MUTATION, INVERSION or MIXED
-	 * nElite -> how many better solution will saved from generation replacement (elitist approach)
+	 * nElite -> how many best solution are saved for selection (elitist approach)
 	 */
-	public void start(int combinationMethod, int nElite) {
-		if(combinationMethod > 3) {
-			System.out.println("Wrong combination method");
-			return;
-		}
-		
-		ArrayList<Solution> eliteSolutions = new ArrayList<>();
-		int numIterations = 1;
-		
-		System.out.println("Generating initial population...");
+	public void start(int nElite) {
+		GAThread thread;
+		int generation = 1;
+		mutationRate = 1;
+		timeStart = System.currentTimeMillis();
+
 		generatePopulation();
-		System.out.println("Initial population generated.");
-		//LocalSearch localSearch = new LocalSearch(data);
+		Collections.sort(population, Solution::compare);		
 		
-		Collections.sort(population, (a,b) -> b.objectiveFunction-a.objectiveFunction);
+		System.out.println("Initial population generated.");
 		
 		//TODO ciclo - CONDIZIONE DI STOP -> TIME LIMIT...
 		while(true) {
-			//sort solutions in decreasing order of objective functions
-			for(int i=0; i<nElite; i++) {
-				eliteSolutions.add(population.get(i).clone());
+			
+			/*
+			if(generation % 10 == 0) {
+				System.out.println("Parents before combination:");
+				for(Solution s : population)
+					System.out.println(s);
+			}
+			*/
+			
+			combination();
+			
+			//local search and check
+			for(Solution s : children) {
+				thread = new GAThread(s);
+				listThreads.add(thread);
+				thread.start();
 			}
 			
-			//System.out.println("Iteration " + numIterations + ": starting combination..");
-			combination(combinationMethod);
-			//System.out.println("Iteration " + numIterations + ": combination ended.");
-			
-			//TODO in caso di best solution ->> stampo su file
-			//per tutta la nuova popolazione, ricalcolo la objective function e la memoria, poi chiamo il checkandsavebestsolution
-			for(Solution s : population) {
-				bestImprovement(s); //local search.
-				checkAndSaveBestSolution(s.matrix, s.objectiveFunction);
+			//wait for threads to finish
+			for(GAThread t : listThreads){
+				try {
+					t.join();
+				}catch(Exception e) {
+					e.printStackTrace();
+					return;
+				}
 			}
+			listThreads.clear();
+
+			/* la faccio nella local search
+
+			for(Solution s : children)
+				checkAndSaveBestSolution(s);
+			*/
 			
-			//System.out.println("Iteration " + numIterations + ": best objective function: " + bestObjectiveFunction);
+			/*
+			if(generation % 100 == 0) {
+				System.out.println("Children before selection:");
+				for(Solution s : children)
+					System.out.println(s);
+			}
+			*/
 			
-			//TODO evolution
-			//rimetto eventuali genitori rimossi
-			population.addAll(eliteSolutions);
-			eliteSolutions.clear();
-			Collections.sort(population, (a,b) -> b.objectiveFunction-a.objectiveFunction);
-			for(int i=0; i<nElite; i++)
-				population.remove(numPopulation);
+			//selection
+			selection(nElite);
 			
-			//System.out.println("Iteration " + numIterations + ": ended.");
-			numIterations++;
+			System.out.println("Generation " + generation + ": best objective function: " + bestObjectiveFunction);
+			generation++;
+			mutationRate += 0.1;
 		}
 		
-	}
+	}	
+	
 
 	/*
 	 * method for the generation of initial population.
 	 */
 	private void generatePopulation() {
 		//TODO verifica correttezza
-		//TODO ottimizza (esempio i data.get(...) fare una volta sola)
 		boolean[] tempIndexes;
-		int tempObjectiveFunction;
 		Solution tempSolution;
-		int[][] tempMatrix = new int[data.getnConfigurations()][data.getnQueries()];
+		int actualSize = population.size();
 		
-		for(int i=0; i<numPopulation; i++) {
-			//generate a random solution
-			
+		for(int i=0; i<numPopulation - actualSize; i++) {
+
 			//generate a good and feasible solution
-			tempIndexes = Utils.generateRandomIndexes(data, 0.8);
-			
-			//compute objective function and solution matrix
-			tempObjectiveFunction = Utils.generateSolutionFromIndexes(data, tempIndexes, tempMatrix);
+			//tempIndexes = Utils.generateRandomIndexes(data, 0.8);
+			tempIndexes = Utils.generateRandomIndexes2(data);
+			//tempIndexes = Utils.generateRandomIndexes3(data);
 			
 			//add new solution to population
-			tempSolution = new Solution(tempIndexes, tempObjectiveFunction, tempMatrix);
+			tempSolution = Utils.generateSolutionFromIndexes(data, tempIndexes);
 			population.add(tempSolution);
 			
 			//save best solution and best objective function
-			checkAndSaveBestSolution(tempMatrix, tempObjectiveFunction);
+			checkAndSaveBestSolution(tempSolution);
 			
 		}
-		
+		//Collections.sort(population, Solution::compare);
 	}
 	
 	/*
 	 * Method that checks if a solution is the best found so far.
 	 * If it is, write this solution to output file
 	 */
-	private void checkAndSaveBestSolution(int[][] matrix, int objectiveFunction) {
+	private synchronized void checkAndSaveBestSolution(Solution s) {
 		//TODO verifica correttezza e rivedi
+		int objectiveFunction = s.getObjectiveFunction();
+		int[][] matrix = s.getMatrix();
+		long time = System.currentTimeMillis();
+		
+		if(!s.isFeasible()) return;
 		
 		if(objectiveFunction > bestObjectiveFunction) {
 			bestObjectiveFunction = objectiveFunction;
 			
-			System.out.println("New best solution! Objective Function: " + bestObjectiveFunction);
+			System.out.println("New best solution! Time: " + (time - timeStart)/1000.0 + " Objective Function: " + bestObjectiveFunction);
+			mutationRate = 1;
 			
 			//write to output file
 			//TODO vedi nome file
@@ -129,168 +147,217 @@ public class GeneticAlgorithm2 {
 		}
 	}
 	
-	/*
-	 * Combination method.
-	 * Four different types:
-	 * Crossover -> mix two solutions
-	 * Mutation -> change one index (activated -> not activated and viceversa)
-	 * Inversion -> invert the values of an interval of indexes
-	 * Mixed -> randomly select one of the three types above
-	 */
-	//TODO rivedi bene, vedi se esistono altri metodi di combinazione
-	private void combination(int combinationMethod) {
+	private void combination() {
+		Solution s, s1, s2;
 		Random rand = new Random();
-		int cMethod = combinationMethod;
-		Solution stemp, parent1, parent2;
-
-		if(combinationMethod == MIXED) {
-			//select a combination method (random or weighted probability)
-			cMethod = rand.nextInt(3);
-		}
-		switch(cMethod) {
-		case CROSSOVER:
-			ArrayList<Solution> newPopulation = new ArrayList<>();
-			//TODO rivederee!!!!! ho scelto di randomizzare ma RIVEDI
-			if(numPopulation % 2 != 0) {
-				stemp = population.remove(rand.nextInt(numPopulation));
-				newPopulation.add(stemp);
-			}
-			for(int i=population.size(); i>0;) {
-				parent1 = population.remove(rand.nextInt(i--));
-				parent2 = population.remove(rand.nextInt(i--));
-				crossover(parent1.indexes, parent2.indexes);
-				newPopulation.add(parent1);
-				newPopulation.add(parent2);
-			}
+		ArrayList<boolean[]> list = new ArrayList<>();
+		
+		//TODO combination + local search + check best solution
+		//TODO rivedere metodo di combinazione
+		
+		for(int i=0; i<numPopulation/2; i++) {
+			//take the first parent in order, and the second randomly selected
+			s1 = population.get(i);
+			s2 = population.get(rand.nextInt(numPopulation));
 			
-			population = newPopulation;				
-			break;
-		case MUTATION:
-			for(Solution s : population)
-				mutation(s.indexes, 1);
-			break;
-		case INVERSION:
-			for(Solution s : population)
-				inversion(s.indexes);
-			break;						
+			crossover(s1.getIndexes(), s2.getIndexes(), list);
+		}
+		
+		for(boolean[] child : list) {
+			mutation(child);
+			s = Utils.generateSolutionFromIndexes(data, child);
+			children.add(s);
 		}
 	}
 	
+	
 	/*
-	 * Crossover
+	private boolean checkSimilarity(Solution parent1, Solution parent2) {
+		boolean[] indexes1 = parent1.getIndexes();
+		boolean[] indexes2 = parent2.getIndexes();
+		int nIndexes = indexes1.length;
+		int equalGenes = 0;
+		
+		for(int i=0; i<nIndexes; i++) {
+			if(indexes1[i] == indexes2[i])
+				equalGenes++;
+		}
+		
+		if(equalGenes > equalGenes * 0.8)
+			return true;
+		
+		return false;
+	}
+	*/
+	
+	/*
+	 * Uniform Crossover
 	 */
-	private void crossover(boolean[] parent1, boolean[] parent2) {
+	private void crossover(boolean[] parent1, boolean[] parent2, ArrayList<boolean[]> list) {
 		Random rand = new Random();
-		boolean temp;
 		int nIndexes = parent1.length;
-		//crossoverLine1 always bigger than crossoverLine2
-		int crossoverLine1, crossoverLine2;
-		do {
-			crossoverLine1 = rand.nextInt(nIndexes);
-			crossoverLine2 = rand.nextInt(1 + crossoverLine1);
-		} while(crossoverLine1 == crossoverLine2);
 		
-		for(int i=crossoverLine2; i<=crossoverLine1; i++) {
-			temp = parent1[i];
-			parent1[i] = parent2[i];
-			parent2[i] = temp;
-		}
+		boolean[] child1 = new boolean[nIndexes];
+		boolean[] child2 = new boolean[nIndexes];
 		
-	}
-	
-	/*
-	 * Mutation
-	 */
-	private void mutation(boolean[] parent, int iterations) {
-		Random rand = new Random();
-		int index, nIndexes = parent.length;
-		
-		for(int i=0; i<iterations; i++) {
-			index = rand.nextInt(nIndexes);
+		for(int i=0; i<nIndexes; i++) {
 			
-			//System.out.println("Mutation: Index " + index);
-			parent[index] = !parent[index];
+			if(rand.nextBoolean()) {
+				//swap
+				child1[i] = parent2[i];
+				child2[i] = parent1[i];
+			}
+			else {
+				//no swap
+				child1[i] = parent1[i];
+				child2[i] = parent2[i];
+			}
 		}
-		
+
+		list.add(child1);
+		list.add(child2);
 	}
 	
 	/*
-	 * inversion
+	 * Mutation. Flip a index with probability 1 / nIndexes
 	 */
-	private void inversion(boolean[] parent) {
+	private void mutation(boolean[] child) {
 		Random rand = new Random();
-		int nIndexes = parent.length;		
-		int crossoverLine1, crossoverLine2;
-		boolean temp;
+		int nIndexes = child.length;
 		
-		do {
-			crossoverLine1 = rand.nextInt(nIndexes);
-			crossoverLine2 = rand.nextInt(1 + crossoverLine1);
-		} while(crossoverLine1 == crossoverLine2);
+		int range = (int) (Math.round((nIndexes-1) / mutationRate) + 1);
 		
-		for(int i=crossoverLine2, j=crossoverLine1; i<j; i++, j--) {
-			temp = parent[i];
-			parent[i] = parent[j];
-			parent[j] = temp;
+		for(int i=0; i<nIndexes; i++) {
+			
+			if(rand.nextInt(range) == 0) {
+				//flip
+				child[i] = !child[i];
+			}
 		}
-		
+	
 	}
 	
 	/*
 	 * local search method. Best improvement
 	 * change the value of one index (activated -> not activated and viceversa)
-	 * The complexity is O(|I|)
+	 * until convergence is reached
 	 */
 	//TODO rivedi
 	private void bestImprovement(Solution child) {
 		int nIndexes = data.getnIndexes();
-		int bestObjectiveFunction = child.objectiveFunction;
-		int bestIndex = -1, tempObjectiveFunction;
-		int[][] tempMatrix = new int[data.getnConfigurations()][data.getnQueries()];
-		int[][] bestMatrix = null;
-		boolean[] indexes = child.indexes;
-		
-		for(int i=0; i<nIndexes; i++) {
-			indexes[i] = !indexes[i];
-			tempObjectiveFunction = Utils.generateSolutionFromIndexes(data, indexes, tempMatrix);
+		int bestObjectiveFunction = child.getObjectiveFunction();
+		int tempObjectiveFunction;
+		boolean[] indexes;
+		Solution tempSolution, bestSolution = null;
+		boolean found;
+		//float tempFitness;
+		//float bestFitness = child.getFitness();
+
+		while(true) {
+			indexes = child.getIndexes();
+			found = false;
 			
-			if(tempObjectiveFunction > bestObjectiveFunction) {
-				bestObjectiveFunction = tempObjectiveFunction;
-				bestMatrix = tempMatrix.clone();
-				bestIndex = i;
+			for(int i=0; i<nIndexes; i++) {
+				indexes[i] = !indexes[i];
+				
+				tempSolution = Utils.generateSolutionFromIndexes(data, indexes);
+				tempObjectiveFunction = tempSolution.getObjectiveFunction();
+				//tempFitness = tempSolution.getFitness();
+				
+				checkAndSaveBestSolution(tempSolution);
+				
+				//if(tempSolution.isFeasible() && tempObjectiveFunction > bestObjectiveFunction) {
+				if(tempObjectiveFunction > bestObjectiveFunction) {
+				//if(tempFitness > bestFitness) {
+					bestObjectiveFunction = tempObjectiveFunction;
+					//bestFitness = tempFitness;
+					bestSolution = tempSolution;
+					found = true;
+				}
+				
+				indexes[i] = !indexes[i]; //restore state
 			}
 			
-			indexes[i] = !indexes[i]; //restore state
+			if(!found) return; //actual solution is already the best
+			
+			child.setObjectiveFunction(bestSolution.getObjectiveFunction());
+			child.setMemory(bestSolution.getMemory());
+			child.setIndexes(bestSolution.getIndexes());
+			child.setMatrix(bestSolution.getMatrix());
+			child.setFeasible(bestSolution.isFeasible());
+			child.setFitness(bestSolution.getFitness());
 		}
-		
-		if(bestIndex == -1) return; //actual solution is already the best
-		
-		child.objectiveFunction = bestObjectiveFunction;
-		indexes[bestIndex] = !indexes[bestIndex]; //i go to te best neighbor
-		child.matrix = bestMatrix;
 	}
 	
-	private class Solution {
-		private boolean[] indexes;
-		private int objectiveFunction;
-		private int[][] matrix;
+	/*
+	 * Selection method for new generation
+	 * remove equals
+	 * if population size is less than numPopulation -> generate new random solutions
+	 * else remove randomly solutions (saving the first nElite ones)
+	 */
+	private void selection(int nElite) {
+		int ind;
+		Random rand = new Random();
 		
-		public Solution(boolean[] indexes, int objectiveFunction, int[][] matrix) {
-			this.indexes = indexes;
-			this.objectiveFunction = objectiveFunction;
-			this.matrix = matrix;
+		population.addAll(children);
+		children.clear();
+		
+		//System.out.println(population);
+		Collections.sort(population, Solution::compare);
+		removeEquals();
+		
+		if(population.size() < numPopulation) {
+			generatePopulation();
+		}
+		else {
+			while(population.size() > numPopulation) {
+				ind = rand.nextInt(population.size()-nElite) + nElite;
+				population.remove(ind);
+			}
+		}
+	}
+	
+	/*
+	 * method that removes from population solutions with equal objective function
+	 * population list must be ordered!!
+	 */
+	private void removeEquals() {
+		int size = population.size();
+		Solution s, sOld;
+		
+		sOld = population.get(0);
+		for(int i=1; i<size;) {
+			s = population.get(i);
+			
+			if(s.getObjectiveFunction() == sOld.getObjectiveFunction()) {
+				//remove s
+				population.remove(i);
+				
+				//update indexes for loop
+				size--;
+			}
+			else {
+				//ok
+				sOld = s;
+				i++;
+			}
+			
+		}
+	}
+	
+	private class GAThread extends Thread{
+		Solution solution;
+
+		public GAThread(Solution s) {
+			this.solution = s;
 		}
 		
-		public Solution() {}
-		
-		public Solution clone() {
-			Solution s = new Solution();
-			s.indexes = indexes.clone();
-			s.objectiveFunction = objectiveFunction;
-			s.matrix = matrix.clone();
-			
-			return s;
+		@Override
+		public void run() {
+			super.run();
+			bestImprovement(solution);
 		}
 		
 	}
+
 }

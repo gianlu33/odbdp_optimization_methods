@@ -6,9 +6,9 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map.Entry;
+
 import java.util.Random;
 
 public class Utils {
@@ -602,6 +602,69 @@ public class Utils {
 	}
 	
 	/*
+	 * Generate a random set of activated indexes.
+	 * This set provides a solution (maybe non feasible)
+	 * when maximumMemory is reached, algorithm stops
+	 */
+	public static boolean[] generateRandomIndexes2(DataStructure data){
+		int nIndexes = data.getnIndexes();
+		int maximumMemory = data.getMaximumMemory();
+		int[] indexesMemory = data.getIndexesMemory();
+		int index;
+		
+		boolean[] indexes = new boolean[nIndexes];
+		int memoryUsed = 0;
+		
+		int[] sequence = generateRandomOrderedSequence(nIndexes);
+		
+		for(int i=0; i<nIndexes; i++) {
+			if(memoryUsed >= maximumMemory) break;
+			
+			index = sequence[i];
+			indexes[index] = true;
+			memoryUsed += indexesMemory[index];
+		}
+		
+		return indexes;
+	}
+	
+	public static int[] generateRandomOrderedSequence(int values) {
+		Random rand = new Random();
+		int j, temp;
+		
+		int[] sequence = new int[values];
+		for(int i=0; i<values; i++)
+			sequence[i] = i;
+		
+		for(int i=0; i<values; i++) {
+			j = rand.nextInt(values);
+			temp = sequence[i];
+			sequence[i] = sequence[j];
+			sequence[j] = temp;
+		}
+		
+		return sequence;
+	}
+	
+	/*
+	 * Generate a random set of activated indexes.
+	 * This set provides a solution (maybe non feasible)
+	 * for each index, i activate this index with probability 10/nIndexes
+	 */
+	public static boolean[] generateRandomIndexes3(DataStructure data){
+		int nIndexes = data.getnIndexes();
+		Random rand = new Random();
+		boolean[] indexes = new boolean[nIndexes];
+		int prob = nIndexes / 10;
+		
+		for(int i=0; i<nIndexes; i++) {
+			indexes[i] = rand.nextInt(prob) == 0;
+		}
+		
+		return indexes;
+	}
+	
+	/*
 	 * given a boolean array of indexes (indexes[i] == true if activated, false otherwise),
 	 * this method calculates the best solution (ycq) that can be found for this array
 	 * 
@@ -618,20 +681,22 @@ public class Utils {
 	 * Returns the objective function of the solution ycq (-1 if infeasible), and it fills the matrix passed as parameter
 	 * NOTE: the parameter solution MUST BE NOT NULL!!!
 	 */
-	public static int generateSolutionFromIndexes(DataStructure data, boolean[] indexes, int[][] solution){
+	public static Solution generateSolutionFromIndexes(DataStructure data, boolean[] indexes){
 		int totalGain = 0, totalMemory = 0, totalCost = 0, bestConfig, bestGain, gain;
 		HashMap<Integer, ArrayList<Integer>> configurationIndexes = data.getConfigurationIndexes();
 		int[][] configurationQueryGain = data.getConfigurationQueryGain();
 		int[] indexesCost = data.getIndexesCost();
 		int[] indexesMemory = data.getIndexesMemory();
 		int nQueries = data.getnQueries();
+		int nConfigurations = data.getnConfigurations();
+		int maximumMemory = data.getMaximumMemory();
 		
 		ArrayList<Integer> activeConfigurations = new ArrayList<>();
 		boolean[] realIndexes = new boolean[indexes.length];
-		
-		//clear matrix solution
-		for(int i = 0; i < solution.length; i++)
-			   Arrays.fill(solution[i], 0);
+		int[][] matrix = new int[nConfigurations][nQueries];
+		boolean isFeasible;
+		int objectiveFunction;
+		float fitness;
 			
 		//from indexes to active configurations
 		configurationIndexes.forEach((k,v) -> {
@@ -665,25 +730,28 @@ public class Utils {
 			if(bestConfig == -1) continue; //no configuration with gain > 0 for this query found
 			
 			totalGain += bestGain;
-			solution[bestConfig][i] = 1;
+			matrix[bestConfig][i] = 1;
 			
 			//activate real indexes
 			for(int index : configurationIndexes.get(bestConfig)) {
 				realIndexes[index] = true;
 			}
-		}			
-			
+		}	
+		
 		//compute real cost and memory of the indexes, because the solution ycq might not have activate all the indexes
-		//if memory is higher than maximumMemory -> UNFEASIBLE SOLUTION
 		for(int i=0; i<realIndexes.length; i++) {
 			totalCost += realIndexes[i] ? indexesCost[i] : 0;
 			totalMemory += realIndexes[i] ? indexesMemory[i] : 0;
 		}
 		
-		if(totalMemory > data.getMaximumMemory())
-			return -1; //unfeasible solution
+		isFeasible = totalMemory > maximumMemory ? false : true;	
 		
-		return totalGain - totalCost; //objective function
+		objectiveFunction = totalGain - totalCost;
+		fitness = isFeasible ? (float) objectiveFunction / maximumMemory : (float) objectiveFunction / totalMemory;
+		
+		Solution s = new Solution(realIndexes, objectiveFunction, totalMemory, matrix, isFeasible, fitness);
+		
+		return s;
 	}
 	
 	//TODO vedere se ci sono altri metodi di utilità da implementare
