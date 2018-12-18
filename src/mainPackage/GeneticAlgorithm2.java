@@ -1,5 +1,8 @@
 package mainPackage;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Random;
@@ -8,12 +11,12 @@ public class GeneticAlgorithm2 {
 	private DataStructure data;
 	private ArrayList<Solution> population;
 	private ArrayList<Solution> children;
-	int numPopulation;
+	private int numPopulation;
 	private int bestObjectiveFunction;
+	private Solution bestSolution;
 	private ArrayList<GAThread> listThreads;
-	float mutationRate; //serve per potenziare la mutation se non trova soluzioni per molte generazioni
-	long timeStart;
-	
+	private long timeStart;
+
 	public GeneticAlgorithm2(DataStructure data, int numPopulation) {
 		this.data = data;
 		this.population = new ArrayList<>();
@@ -23,39 +26,42 @@ public class GeneticAlgorithm2 {
 		listThreads = new ArrayList<>();
 	}
 	
-	//TODO rivedi bene sti metodi che magari hai scritto cagate
-	
-	/*
-	 * start method
-	 * nElite -> how many best solution are saved for selection (elitist approach)
-	 */
-	public void start(int nElite) {
-		GAThread thread;
-		int generation = 1;
-		mutationRate = 1;
+	public void start(int nElite, int pressure) {
 		timeStart = System.currentTimeMillis();
-
+		int generation = 1;
+		ArrayList<Solution> temp;
+		GAThread thread;
+		
+		//generation of initial population
 		generatePopulation();
-		Collections.sort(population, Solution::compare);		
 		
-		System.out.println("Initial population generated.");
-		
-		//TODO ciclo - CONDIZIONE DI STOP -> TIME LIMIT...
 		while(true) {
+			//sort
+			Collections.sort(population, Solution::compare);
+			//removeEquals();
+			
+			//elitism -> SAVE THE BEST SOLUTIONS FOUND SO FAR
+			for(int i=0; i<nElite; i++){
+				Solution s = population.get(i);
+				//localSearch(s);
+				children.add(s);
+			}
+			
+			//add best solution
+			localSearch(bestSolution);
+			children.add(bestSolution);
+			
+			//fill population with random elements
+			//generatePopulation();
 			
 			/*
-			if(generation % 10 == 0) {
-				System.out.println("Parents before combination:");
-				for(Solution s : population)
-					System.out.println(s);
-			}
-			*/
+			if(generation % 10 == 0)
+				printSimilarityMatrix();
+				*/
 			
-			combination();
-			
-			//local search and check
-			for(Solution s : children) {
-				thread = new GAThread(s);
+			//create a thread for each new element i have to create
+			for(int i=0; i<numPopulation-nElite-1; i++) {
+				thread = new GAThread(pressure, generation);
 				listThreads.add(thread);
 				thread.start();
 			}
@@ -69,66 +75,57 @@ public class GeneticAlgorithm2 {
 					return;
 				}
 			}
-			listThreads.clear();
-
-			/* la faccio nella local search
-
-			for(Solution s : children)
-				checkAndSaveBestSolution(s);
-			*/
+			listThreads.clear();		
 			
-			/*
-			if(generation % 100 == 0) {
-				System.out.println("Children before selection:");
-				for(Solution s : children)
-					System.out.println(s);
-			}
-			*/
-			
-			//selection
-			selection(nElite);
+			//new generation
+			temp = population;
+			population = children;
+			children = temp;
+			children.clear();
 			
 			System.out.println("Generation " + generation + ": best objective function: " + bestObjectiveFunction);
 			generation++;
-			mutationRate += 0.1;
+			//TODO verifica pressure
+			if(generation % 10 == 0)
+				pressure++;
 		}
 		
-	}	
+		//population.clear();
+	}
 	
-
 	/*
 	 * method for the generation of initial population.
 	 */
+	
 	private void generatePopulation() {
-		//TODO verifica correttezza
 		boolean[] tempIndexes;
 		Solution tempSolution;
 		int actualSize = population.size();
 		
 		for(int i=0; i<numPopulation - actualSize; i++) {
 
-			//generate a good and feasible solution
+			//generate a random solution
 			//tempIndexes = Utils.generateRandomIndexes(data, 0.8);
 			tempIndexes = Utils.generateRandomIndexes2(data);
 			//tempIndexes = Utils.generateRandomIndexes3(data);
 			
 			//add new solution to population
 			tempSolution = Utils.generateSolutionFromIndexes(data, tempIndexes);
+			firstImprovement(tempSolution);
 			population.add(tempSolution);
 			
 			//save best solution and best objective function
 			checkAndSaveBestSolution(tempSolution);
-			
 		}
 		//Collections.sort(population, Solution::compare);
 	}
+	
 	
 	/*
 	 * Method that checks if a solution is the best found so far.
 	 * If it is, write this solution to output file
 	 */
 	private synchronized void checkAndSaveBestSolution(Solution s) {
-		//TODO verifica correttezza e rivedi
 		int objectiveFunction = s.getObjectiveFunction();
 		int[][] matrix = s.getMatrix();
 		long time = System.currentTimeMillis();
@@ -137,9 +134,9 @@ public class GeneticAlgorithm2 {
 		
 		if(objectiveFunction > bestObjectiveFunction) {
 			bestObjectiveFunction = objectiveFunction;
+			bestSolution = s;
 			
 			System.out.println("New best solution! Time: " + (time - timeStart)/1000.0 + " Objective Function: " + bestObjectiveFunction);
-			mutationRate = 1;
 			
 			//write to output file
 			//TODO vedi nome file
@@ -147,56 +144,56 @@ public class GeneticAlgorithm2 {
 		}
 	}
 	
-	private void combination() {
-		Solution s, s1, s2;
+	/*
+	 * Tournament selection.
+	 * Extract random individuals from population, and select the best one
+	 * The number of individual to extract is passed as parameter "Pressure"
+	 * Population list is ordered, so the best individual is the one with lowest index
+	 */
+	private Solution tournamentSelection(int pressure) {
+		int best = -1, temp;
 		Random rand = new Random();
-		ArrayList<boolean[]> list = new ArrayList<>();
 		
-		//TODO combination + local search + check best solution
-		//TODO rivedere metodo di combinazione
-		
-		for(int i=0; i<numPopulation/2; i++) {
-			//take the first parent in order, and the second randomly selected
-			s1 = population.get(i);
-			s2 = population.get(rand.nextInt(numPopulation));
+		for(int i=0; i<pressure; i++) {
+			temp = rand.nextInt(numPopulation);
 			
-			crossover(s1.getIndexes(), s2.getIndexes(), list);
+			if(best == -1 || temp < best)
+				best = temp;
 		}
 		
-		for(boolean[] child : list) {
-			mutation(child);
-			s = Utils.generateSolutionFromIndexes(data, child);
-			children.add(s);
-		}
+		return population.get(best);
 	}
 	
-	
-	/*
-	private boolean checkSimilarity(Solution parent1, Solution parent2) {
+	private float checkSimilarity(Solution parent1, Solution parent2) {
 		boolean[] indexes1 = parent1.getIndexes();
 		boolean[] indexes2 = parent2.getIndexes();
 		int nIndexes = indexes1.length;
-		int equalGenes = 0;
+		int equalGenes = 0, totalGenes = 0;
 		
 		for(int i=0; i<nIndexes; i++) {
-			if(indexes1[i] == indexes2[i])
+			
+			//Jaccard similarity
+			if(indexes1[i] && indexes2[i])
 				equalGenes++;
+			
+			if(indexes1[i] || indexes2[i])
+				totalGenes++;
 		}
 		
-		if(equalGenes > equalGenes * 0.8)
-			return true;
-		
-		return false;
+		return (float) equalGenes / totalGenes;
 	}
-	*/
 	
 	/*
 	 * Uniform Crossover
+	 * Try to have only a child.
 	 */
-	private void crossover(boolean[] parent1, boolean[] parent2, ArrayList<boolean[]> list) {
+	private boolean[] crossover(Solution s1, Solution s2) {
 		Random rand = new Random();
-		int nIndexes = parent1.length;
 		
+		boolean[] parent1 = s1.getIndexes();
+		boolean[] parent2 = s2.getIndexes();
+
+		int nIndexes = parent1.length;
 		boolean[] child1 = new boolean[nIndexes];
 		boolean[] child2 = new boolean[nIndexes];
 		
@@ -214,27 +211,117 @@ public class GeneticAlgorithm2 {
 			}
 		}
 
-		list.add(child1);
-		list.add(child2);
+		return rand.nextInt(2) == 0 ? child1 : child2;
 	}
 	
 	/*
-	 * Mutation. Flip a index with probability 1 / nIndexes
+	 * Mutation. Flip an index with probability 1 / mutationRate
 	 */
-	private void mutation(boolean[] child) {
+	private void mutation(boolean[] child, int mutationRate) {
 		Random rand = new Random();
 		int nIndexes = child.length;
 		
-		int range = (int) (Math.round((nIndexes-1) / mutationRate) + 1);
-		
 		for(int i=0; i<nIndexes; i++) {
 			
-			if(rand.nextInt(range) == 0) {
+			if(rand.nextInt(mutationRate) == 0) {
 				//flip
 				child[i] = !child[i];
 			}
 		}
 	
+	}
+	
+	/*
+	 * Mutation. Swap two random indexes (one 0 and one 1) numSwaps time
+	 */
+	private void mutationSwap(boolean[] child, int numSwaps) {
+		int nIndexes = child.length, ind0, ind1;
+		int[] sequence;
+		
+		for(int i=0; i<numSwaps; i++) {
+			
+			sequence = Utils.generateRandomOrderedSequence(nIndexes);
+			ind0 = ind1 = -1;
+			
+			for(int j=0; j<nIndexes; j++) {
+				
+				//find indexes
+				if(child[sequence[j]] && ind1 == -1)
+					ind1 = sequence[j];
+				
+				if(!child[sequence[j]] && ind0 == -1)
+					ind0 = sequence[j];
+				
+				//if i have found the indexes, stop
+				if(ind0 != -1 && ind1 != -1)
+					break;
+			}
+			
+			//if i have not found an index, stop
+			if(ind0 == -1 || ind1 == -1)
+				break;
+			
+			//swap
+			child[ind0] = true;
+			child[ind1] = false;
+		}
+	
+	}
+	
+	/*
+	 * local search method. First improvement
+	 * change the value of one random index (activated -> not activated and viceversa)
+	 * if the new fitness is better, then jump to this solution
+	 * iterate until i can't improve anymore my fitness
+	 */
+	//TODO rivedi
+	private void firstImprovement(Solution child) {
+		int nIndexes = data.getnIndexes();
+		//int bestObjectiveFunction = child.getObjectiveFunction();
+		//int tempObjectiveFunction;
+		boolean[] indexes;
+		Solution tempSolution, bestSolution = child;
+		boolean found;
+		float tempFitness;
+		float bestFitness = child.getFitness();
+		int[] sequence;
+
+		while(true) {
+			indexes = bestSolution.getIndexes();
+			found = false;
+			
+			sequence = Utils.generateRandomOrderedSequence(nIndexes);
+			
+			for(int i=0; i<nIndexes && !found; i++) {
+				indexes[sequence[i]] = !indexes[sequence[i]];
+				
+				tempSolution = Utils.generateSolutionFromIndexes(data, indexes);
+				//tempObjectiveFunction = tempSolution.getObjectiveFunction();
+				tempFitness = tempSolution.getFitness();
+				
+				checkAndSaveBestSolution(tempSolution);
+				
+				//if(tempSolution.isFeasible() && tempObjectiveFunction > bestObjectiveFunction) {
+				//if(tempObjectiveFunction > bestObjectiveFunction) {
+				if(tempFitness > bestFitness) {
+					//bestObjectiveFunction = tempObjectiveFunction;
+					bestFitness = tempFitness;
+					bestSolution = tempSolution;
+					found = true;
+				}
+				
+				indexes[sequence[i]] = !indexes[sequence[i]]; //restore state
+			}
+			
+			if(!found) return; //actual solution is already the best
+			
+			child.setObjectiveFunction(bestSolution.getObjectiveFunction());
+			child.setMemory(bestSolution.getMemory());
+			child.setIndexes(bestSolution.getIndexes());
+			child.setMatrix(bestSolution.getMatrix());
+			child.setFeasible(bestSolution.isFeasible());
+			child.setFitness(bestSolution.getFitness());
+		}
 	}
 	
 	/*
@@ -245,13 +332,13 @@ public class GeneticAlgorithm2 {
 	//TODO rivedi
 	private void bestImprovement(Solution child) {
 		int nIndexes = data.getnIndexes();
-		int bestObjectiveFunction = child.getObjectiveFunction();
-		int tempObjectiveFunction;
+		//int bestObjectiveFunction = child.getObjectiveFunction();
+		//int tempObjectiveFunction;
 		boolean[] indexes;
 		Solution tempSolution, bestSolution = null;
 		boolean found;
-		//float tempFitness;
-		//float bestFitness = child.getFitness();
+		float tempFitness;
+		float bestFitness = child.getFitness();
 
 		while(true) {
 			indexes = child.getIndexes();
@@ -261,16 +348,16 @@ public class GeneticAlgorithm2 {
 				indexes[i] = !indexes[i];
 				
 				tempSolution = Utils.generateSolutionFromIndexes(data, indexes);
-				tempObjectiveFunction = tempSolution.getObjectiveFunction();
-				//tempFitness = tempSolution.getFitness();
+				//tempObjectiveFunction = tempSolution.getObjectiveFunction();
+				tempFitness = tempSolution.getFitness();
 				
 				checkAndSaveBestSolution(tempSolution);
 				
 				//if(tempSolution.isFeasible() && tempObjectiveFunction > bestObjectiveFunction) {
-				if(tempObjectiveFunction > bestObjectiveFunction) {
-				//if(tempFitness > bestFitness) {
-					bestObjectiveFunction = tempObjectiveFunction;
-					//bestFitness = tempFitness;
+				//if(tempObjectiveFunction > bestObjectiveFunction) {
+				if(tempFitness > bestFitness) {
+					//bestObjectiveFunction = tempObjectiveFunction;
+					bestFitness = tempFitness;
 					bestSolution = tempSolution;
 					found = true;
 				}
@@ -289,38 +376,110 @@ public class GeneticAlgorithm2 {
 		}
 	}
 	
-	/*
-	 * Selection method for new generation
-	 * remove equals
-	 * if population size is less than numPopulation -> generate new random solutions
-	 * else remove randomly solutions (saving the first nElite ones)
-	 */
-	private void selection(int nElite) {
-		int ind;
-		Random rand = new Random();
-		
-		population.addAll(children);
-		children.clear();
-		
-		//System.out.println(population);
-		Collections.sort(population, Solution::compare);
-		removeEquals();
-		
-		if(population.size() < numPopulation) {
-			generatePopulation();
-		}
-		else {
-			while(population.size() > numPopulation) {
-				ind = rand.nextInt(population.size()-nElite) + nElite;
-				population.remove(ind);
+	private void localSearch(Solution child) {
+		int nIndexes = data.getnIndexes();
+		//int bestObjectiveFunction = child.getObjectiveFunction();
+		//int tempObjectiveFunction;
+		boolean[] indexes;
+		Solution tempSolution, bestSolution = child;
+		boolean found;
+		float tempFitness;
+		float bestFitness = child.getFitness();
+		int[] sequence;
+
+		while(true) {
+			indexes = bestSolution.getIndexes();
+			found = false;
+			
+			sequence = Utils.generateRandomOrderedSequence(nIndexes);
+			
+			for(int i=0; i<nIndexes && !found; i++) {
+				if(!indexes[sequence[i]]) continue;
+				
+				//set this index to 0
+				indexes[sequence[i]] = false;
+				
+				for(int j=0; j<nIndexes && !found; j++) {
+					if(indexes[sequence[j]]) continue;
+					
+					//set this index to 1
+					indexes[sequence[j]] = true;
+					
+					tempSolution = Utils.generateSolutionFromIndexes(data, indexes);
+					//tempObjectiveFunction = tempSolution.getObjectiveFunction();
+					tempFitness = tempSolution.getFitness();
+					
+					checkAndSaveBestSolution(tempSolution);
+					
+					//if(tempSolution.isFeasible() && tempObjectiveFunction > bestObjectiveFunction) {
+					//if(tempObjectiveFunction > bestObjectiveFunction) {
+					if(tempFitness > bestFitness) {
+						//bestObjectiveFunction = tempObjectiveFunction;
+						bestFitness = tempFitness;
+						bestSolution = tempSolution;
+						found = true;
+					}
+					
+					indexes[sequence[j]] = false;
+				}
+				
+				indexes[sequence[i]] = true;
 			}
+			
+			if(!found) return; //actual solution is already the best
+			
+			child.setObjectiveFunction(bestSolution.getObjectiveFunction());
+			child.setMemory(bestSolution.getMemory());
+			child.setIndexes(bestSolution.getIndexes());
+			child.setMatrix(bestSolution.getMatrix());
+			child.setFeasible(bestSolution.isFeasible());
+			child.setFitness(bestSolution.getFitness());
 		}
 	}
 	
-	/*
-	 * method that removes from population solutions with equal objective function
-	 * population list must be ordered!!
-	 */
+	
+	private synchronized void addToChildren(Solution child) {
+		children.add(child);
+	}
+	
+	private void printSimilarityMatrix() {
+		BufferedWriter bw;
+		String s;
+		float similarity, totSimilarity = 0, minSimilarity = -1, maxSimilarity = -1;
+		try {
+			bw = new BufferedWriter(new FileWriter("outputs/GeneticAlgorithm2/similarity.txt"));
+			
+			for(int i=0; i<numPopulation; i++) {
+				for(int j=0; j<numPopulation; j++) {
+					similarity = checkSimilarity(population.get(i), population.get(j));
+					
+					if(i != j) {
+						totSimilarity += similarity;
+						if(minSimilarity == -1 || similarity < minSimilarity)
+							minSimilarity = similarity;
+						if(maxSimilarity == -1 || similarity > maxSimilarity)
+							maxSimilarity = similarity;
+					}
+					s = String.format("%.2f ", similarity);
+					bw.write(s);
+				}
+				bw.newLine();
+			}
+			bw.close();
+			
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (NumberFormatException e) {
+			e.printStackTrace();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		
+		System.out.println("Average similarity: " + (totSimilarity / (numPopulation*numPopulation - numPopulation)));
+		System.out.println("Min similarity: " + minSimilarity);
+		System.out.println("Max similarity: " + maxSimilarity);
+	}
+	
 	private void removeEquals() {
 		int size = population.size();
 		Solution s, sOld;
@@ -345,19 +504,51 @@ public class GeneticAlgorithm2 {
 		}
 	}
 	
-	private class GAThread extends Thread{
-		Solution solution;
-
-		public GAThread(Solution s) {
-			this.solution = s;
+	
+	private class GAThread extends Thread{	
+		private int pressure, generation;
+		
+		private GAThread(int pressure, int generation) {
+			this.pressure = pressure;
+			this.generation = generation;
 		}
 		
 		@Override
 		public void run() {
+			// TODO Auto-generated method stub
 			super.run();
-			bestImprovement(solution);
+			
+			//selection -> TOURNAMENT SELECTION FOR COMBINATION
+			Solution s1 = tournamentSelection(pressure);
+			Solution s2 = tournamentSelection(pressure);
+			
+			//check similarity
+			float similarity = checkSimilarity(s1, s2);
+			//adaptive mutation rate is function of similarity
+			if(similarity < 0.1f) similarity = 0.1f;
+			
+			int mutationRate = 105 - Math.round(similarity * 100); //TODO verifica una funzione di similarity
+			
+			//combination -> CROSSOVER + MUTATION
+			boolean[] child = crossover(s1, s2);
+			mutation(child, mutationRate);
+			Solution sChild = Utils.generateSolutionFromIndexes(data, child);
+			checkAndSaveBestSolution(sChild);
+			
+			//local search
+			firstImprovement(sChild);
+			//bestImprovement(sChild);
+			//localSearch(sChild);
+			
+			/*
+			//mutation
+			child = sChild.getIndexes();
+			mutationSwap(child, 2);
+			sChild = Utils.generateSolutionFromIndexes(data, child, s1, s2);
+			*/
+			
+			//add to children
+			addToChildren(sChild);				
 		}
-		
 	}
-
 }

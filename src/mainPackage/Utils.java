@@ -677,9 +677,6 @@ public class Utils {
 	 * 		and calculate the objective function and the total memory used * 
 	 * 
 	 * It is very easy and fast finding this solution.
-	 * 
-	 * Returns the objective function of the solution ycq (-1 if infeasible), and it fills the matrix passed as parameter
-	 * NOTE: the parameter solution MUST BE NOT NULL!!!
 	 */
 	public static Solution generateSolutionFromIndexes(DataStructure data, boolean[] indexes){
 		int totalGain = 0, totalMemory = 0, totalCost = 0, bestConfig, bestGain, gain;
@@ -745,9 +742,10 @@ public class Utils {
 		}
 		
 		isFeasible = totalMemory > maximumMemory ? false : true;	
+		float multiplier = 1f;
 		
 		objectiveFunction = totalGain - totalCost;
-		fitness = isFeasible ? (float) objectiveFunction / maximumMemory : (float) objectiveFunction / totalMemory;
+		fitness = isFeasible ? (float) objectiveFunction / maximumMemory : (float) objectiveFunction / (multiplier * totalMemory);
 		
 		Solution s = new Solution(realIndexes, objectiveFunction, totalMemory, matrix, isFeasible, fitness);
 		

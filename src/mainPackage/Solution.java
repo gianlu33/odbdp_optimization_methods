@@ -15,6 +15,7 @@ public class Solution {
 		this.matrix = matrix;
 		this.feasible = feasible;
 		this.fitness = fitness;
+
 	}
 	
 	private Solution() {
@@ -85,8 +86,7 @@ public class Solution {
 		return Float.compare(b.fitness, a.fitness);
 	}
 	
-	/*
-	public static int compare(Solution a, Solution b) {
+	public static int compare2(Solution a, Solution b) {
 		if(a.feasible == b.feasible)
 			return Float.compare(b.fitness, a.fitness);
 		
@@ -95,15 +95,15 @@ public class Solution {
 		
 		return 1;
 	}
-	*/
 	
 	public String toString() {
 		StringBuffer sb = new StringBuffer();
 		
-		System.out.println("Feasible: " + feasible);
-		System.out.println("Obj. Function: " + objectiveFunction);
-		System.out.println("Fitness: " + fitness);
-		System.out.println("Memory: " + memory);
+		
+		sb.append("Feasible: " + feasible + "\n");
+		sb.append("Obj. Function: " + objectiveFunction + "\n");
+		sb.append("Fitness: " + fitness + "\n");
+		sb.append("Memory: " + memory + "\n");
 		
 		for(int i=0; i<indexes.length; i++) {
 			if(indexes[i])
