@@ -7,30 +7,72 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Random;
 
-public class GeneticAlgorithm2 {
+public class GeneticDebug {
 	private DataStructure data;
 	private ArrayList<Solution> population;
 	private ArrayList<Solution> children;
 	private int numPopulation;
 	private int bestObjectiveFunction;
 	private Solution bestSolution;
-	private ArrayList<GAThread> listThreads;
 	private long timeStart;
+	BufferedWriter bw;
 
-	public GeneticAlgorithm2(DataStructure data, int numPopulation) {
+	public GeneticDebug(DataStructure data, int numPopulation) {
 		this.data = data;
 		this.population = new ArrayList<>();
 		this.children = new ArrayList<>();
 		this.numPopulation = numPopulation;
 		this.bestObjectiveFunction = Integer.MIN_VALUE;
-		listThreads = new ArrayList<>();
+		
+		try {
+			bw = new BufferedWriter(new FileWriter("outputs/GeneticAlgorithm2/debug.txt"));
+			
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (NumberFormatException e) {
+			e.printStackTrace();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 	
 	public void start(int nElite, int pressure) {
 		timeStart = System.currentTimeMillis();
 		int generation = 1;
 		ArrayList<Solution> temp;
-		GAThread thread;
+		
+		try {
+			bw.write("***********************************************");
+			bw.newLine();
+			bw.write("GeneticAlgorithm2");
+			bw.newLine();
+			bw.write("Population size: " + numPopulation);
+			bw.newLine();
+			bw.write("Number of elite solutions: " + nElite);
+			bw.newLine();
+			bw.write("Also bestSolution saved");
+			bw.newLine();
+			bw.write("Pressure: " + pressure + " increment every 10 generations");
+			bw.newLine();
+			bw.write("Uniform crossover");
+			bw.newLine();
+			bw.write("Mutation Rate: 105 - Math.round(similarity * 100)");
+			bw.newLine();
+			bw.write("Local search: first improvement");
+			bw.newLine();
+			bw.write("method localSearch on bestSolution");
+			bw.newLine();
+			bw.write("***********************************************");
+			bw.newLine();
+			
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (NumberFormatException e) {
+			e.printStackTrace();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
 		
 		//generation of initial population
 		generatePopulation();
@@ -40,6 +82,34 @@ public class GeneticAlgorithm2 {
 			Collections.sort(population, Solution::compare);
 			//removeEquals();
 			
+			try {
+				bw.write("------------------");
+				bw.newLine();
+				bw.write("GENERATION " + generation);
+				bw.newLine();
+				bw.write("------------------");
+				bw.newLine();
+				
+				/*
+				bw.write("INITIAL POPULATION");
+				bw.newLine();
+				for(Solution s : population) {
+					bw.write("******************");
+					bw.newLine();
+					bw.write(s.toString());
+					bw.newLine();
+					bw.write("******************");
+					bw.newLine();
+				}
+				*/
+			} catch (IOException e) {
+				e.printStackTrace();
+			} catch (NumberFormatException e) {
+				e.printStackTrace();
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			
 			//elitism -> SAVE THE BEST SOLUTIONS FOUND SO FAR
 			for(int i=0; i<nElite; i++){
 				Solution s = population.get(i);
@@ -48,7 +118,6 @@ public class GeneticAlgorithm2 {
 			}
 			
 			//add best solution
-			localSearch(bestSolution);
 			children.add(bestSolution);
 			
 			//fill population with random elements
@@ -61,21 +130,157 @@ public class GeneticAlgorithm2 {
 			
 			//create a thread for each new element i have to create
 			for(int i=0; i<numPopulation-nElite-1; i++) {
-				thread = new GAThread(pressure, generation);
-				listThreads.add(thread);
-				thread.start();
-			}
-			
-			//wait for threads to finish
-			for(GAThread t : listThreads){
+				//selection -> TOURNAMENT SELECTION FOR COMBINATION
+				Solution s1 = tournamentSelection(pressure);
+				Solution s2 = tournamentSelection(pressure);
+				
 				try {
-					t.join();
-				}catch(Exception e) {
+					bw.write("------------------");
+					bw.newLine();
+					bw.write("PARENTS: ");
+					bw.newLine();
+					
+					bw.write("*");
+					bw.newLine();
+					bw.write(s1.toString());
+					bw.newLine();
+					bw.write("*");
+					bw.newLine();
+					bw.write(s2.toString());
+					bw.newLine();
+					bw.write("------------------");
+					bw.newLine();
+					
+				} catch (IOException e) {
 					e.printStackTrace();
-					return;
+				} catch (NumberFormatException e) {
+					e.printStackTrace();
+				} catch (Exception e) {
+					e.printStackTrace();
 				}
-			}
-			listThreads.clear();		
+				
+				//check similarity
+				float similarity = checkSimilarity(s1, s2);
+				//adaptive mutation rate is function of similarity
+				if(similarity < 0.1f) similarity = 0.1f;
+				
+				int mutationRate = 105 - Math.round(similarity * 100); //TODO verifica una funzione di similarity
+				
+				try {
+					bw.write("****************************");
+					bw.newLine();
+					bw.write("SIMILARITY: " + similarity);
+					bw.newLine();
+					bw.write("MUTATION RATE: " + mutationRate);
+					bw.newLine();
+					bw.write("****************************");
+					bw.newLine();
+					
+				} catch (IOException e) {
+					e.printStackTrace();
+				} catch (NumberFormatException e) {
+					e.printStackTrace();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+				
+				//combination -> CROSSOVER + MUTATION
+				boolean[] child = crossover(s1, s2);
+				
+				try {
+					bw.write("***********");
+					bw.newLine();
+					bw.write("CHILD AFTER CROSSOVER");
+					bw.newLine();
+					for(int j=0; j<child.length; j++) {
+						if(child[j])
+							bw.write("1");
+						else
+							bw.write("0");
+					}
+					bw.newLine();
+					bw.write("***********");
+					bw.newLine();
+					
+				} catch (IOException e) {
+					e.printStackTrace();
+				} catch (NumberFormatException e) {
+					e.printStackTrace();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+				
+				mutation(child, mutationRate);
+				
+				try {
+					bw.write("***********");
+					bw.newLine();
+					bw.write("CHILD AFTER MUTATION");
+					bw.newLine();
+					for(int j=0; j<child.length; j++) {
+						if(child[j])
+							bw.write("1");
+						else
+							bw.write("0");
+					}
+					bw.newLine();
+					bw.write("***********");
+					bw.newLine();
+					
+				} catch (IOException e) {
+					e.printStackTrace();
+				} catch (NumberFormatException e) {
+					e.printStackTrace();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+				Solution sChild = Utils.generateSolutionFromIndexes(data, child);
+				
+				try {
+					bw.write("***********");
+					bw.newLine();
+					bw.write("CHILD BEFORE LOCAL SEARCH");
+					bw.newLine();
+					bw.write(sChild.toString());
+					bw.newLine();
+					bw.write("***********");
+					bw.newLine();
+					
+				} catch (IOException e) {
+					e.printStackTrace();
+				} catch (NumberFormatException e) {
+					e.printStackTrace();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+				
+				checkAndSaveBestSolution(sChild);
+				
+				//local search
+				firstImprovement(sChild);
+				//bestImprovement(sChild);
+				//localSearch(sChild);
+				
+				try {
+					bw.write("***********");
+					bw.newLine();
+					bw.write("CHILD AFTER LOCAL SEARCH");
+					bw.newLine();
+					bw.write(sChild.toString());
+					bw.newLine();
+					bw.write("***********");
+					bw.newLine();
+					
+				} catch (IOException e) {
+					e.printStackTrace();
+				} catch (NumberFormatException e) {
+					e.printStackTrace();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+				
+				children.add(sChild);	
+			}	
 			
 			//new generation
 			temp = population;
@@ -84,6 +289,21 @@ public class GeneticAlgorithm2 {
 			children.clear();
 			
 			System.out.println("Generation " + generation + ": best objective function: " + bestObjectiveFunction);
+			
+			try {
+				bw.write("------------------");
+				bw.newLine();
+				bw.write("GENERATION " + generation + " ENDED. BEST OBJF: " + bestObjectiveFunction);
+				bw.newLine();
+				bw.write("------------------");
+			} catch (IOException e) {
+				e.printStackTrace();
+			} catch (NumberFormatException e) {
+				e.printStackTrace();
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			
 			generation++;
 			//TODO verifica pressure
 			if(generation % 10 == 0)
@@ -136,11 +356,30 @@ public class GeneticAlgorithm2 {
 			bestObjectiveFunction = objectiveFunction;
 			bestSolution = s;
 			
+			try {
+				bw.write("%%%%%%%%%%%%%%%%%%%%");
+				bw.newLine();
+				bw.write("NEW BEST SOLUTION!! Time: " + (time - timeStart) / 1000.0);
+				bw.newLine();
+				bw.write(bestSolution.toString());
+				bw.newLine();
+				bw.write("%%%%%%%%%%%%%%%%%%%%");
+				bw.newLine();
+			} catch (IOException e) {
+				e.printStackTrace();
+			} catch (NumberFormatException e) {
+				e.printStackTrace();
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			
 			System.out.println("New best solution! Time: " + (time - timeStart)/1000.0 + " Objective Function: " + bestObjectiveFunction);
 			
 			//write to output file
 			//TODO vedi nome file
 			Utils.writeOutput(matrix, "outputs/GeneticAlgorithm2/prova.txt");
+			
+			localSearch(bestSolution);
 		}
 	}
 	
@@ -159,6 +398,18 @@ public class GeneticAlgorithm2 {
 			
 			if(best == -1 || temp < best)
 				best = temp;
+		}
+		
+		try {
+			bw.write("Parent index: " + best);
+			bw.newLine();
+
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (NumberFormatException e) {
+			e.printStackTrace();
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 		
 		return population.get(best);

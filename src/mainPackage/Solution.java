@@ -34,6 +34,15 @@ public class Solution {
 		return s;
 	}
 	
+	public void copy(Solution s) {
+		this.indexes = s.indexes;
+		this.objectiveFunction = s.objectiveFunction;
+		this.memory = s.memory;
+		this.matrix = s.matrix;
+		this.feasible = s.feasible;
+		this.fitness = s.fitness;
+	}
+	
 	public boolean[] getIndexes() {
 		return indexes;
 	}
