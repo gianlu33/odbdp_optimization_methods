@@ -19,7 +19,7 @@ public class GeneticAlgorithm {
 		this.data = data;
 		this.bestSolutions = new LinkedList<>();
 		this.bestObjectiveFunction = Integer.MIN_VALUE;
-		this.bestFitness = Float.MIN_VALUE;
+		this.bestFitness = -Float.MAX_VALUE;
 		this.outputfile = outputfile;
 		this.numPopulation = numPopulation;
 		this.pressure = pressure;
@@ -29,13 +29,13 @@ public class GeneticAlgorithm {
 	public void start() {
 		int generation = 1;
 		int pressureThread = pressure;
-		
 		ArrayList<Solution> population = new ArrayList<>();
 		ArrayList<Solution> children = new ArrayList<>();
 		ArrayList<Solution> temp;
 		Solution s1, s2, sChild;
 		float similarity;
 		int mutationRate;
+		int size;
 		
 		//initial population
 		generatePopulation(population);
@@ -43,9 +43,10 @@ public class GeneticAlgorithm {
 		while(true) {			
 			//elitism -> SAVE THE BEST SOLUTIONS FOUND SO FAR
 			children.addAll(bestSolutions);
+			size = children.size();
 			
 			//crossover, mutation, local search to populate children
-			for(int i=0; i<numPopulation-nElite; i++) {
+			for(int i=0; i<numPopulation - size; i++) {
 				//Tournament selection
 				s1 = tournamentSelection(population, pressureThread);
 				s2 = tournamentSelection(population, pressureThread);
@@ -99,6 +100,13 @@ public class GeneticAlgorithm {
 			
 			//add new solution to population
 			tempSolution = Utils.generateSolutionFromIndexes(data, tempIndexes);
+			
+			if(tempSolution.isFeasible() && tempSolution.getObjectiveFunction() > bestObjectiveFunction)
+				printBestSolution(tempSolution);
+			
+			if(tempSolution.getFitness() > bestFitness)
+				insertInBestSolutions(tempSolution);
+			
 			firstImprovement(tempSolution);
 			population.add(tempSolution);
 		}
@@ -144,7 +152,7 @@ public class GeneticAlgorithm {
 	private Solution tournamentSelection(ArrayList<Solution> population, int pressure) {
 		Random rand = new Random();
 		Solution temp, best = null;
-		float bestFitness = Float.MIN_VALUE, tempFitness;
+		float bestFitness = -Float.MAX_VALUE, tempFitness;
 		
 		for(int i=0; i<pressure; i++) {
 			temp = population.get(rand.nextInt(numPopulation));
@@ -175,7 +183,7 @@ public class GeneticAlgorithm {
 				totalGenes++;
 		}
 		
-		return (float) equalGenes / totalGenes;
+		return totalGenes > 0 ? (float) equalGenes / totalGenes : 1f;
 	}
 
 
@@ -190,23 +198,20 @@ public class GeneticAlgorithm {
 
 		int nIndexes = parent1.length;
 		boolean[] child1 = new boolean[nIndexes];
-		boolean[] child2 = new boolean[nIndexes];
 		
 		for(int i=0; i<nIndexes; i++) {
 			
 			if(rand.nextBoolean()) {
 				//swap
 				child1[i] = parent2[i];
-				child2[i] = parent1[i];
 			}
 			else {
 				//no swap
 				child1[i] = parent1[i];
-				child2[i] = parent2[i];
 			}
 		}
 
-		return rand.nextInt(2) == 0 ? child1 : child2;
+		return child1;
 	}
 	
 	/*
@@ -215,7 +220,7 @@ public class GeneticAlgorithm {
 	private void mutation(boolean[] child, int mutationRate) {
 		Random rand = new Random();
 		int nIndexes = child.length;
-		
+
 		for(int i=0; i<nIndexes; i++) {
 			
 			if(rand.nextInt(mutationRate) == 0) {
