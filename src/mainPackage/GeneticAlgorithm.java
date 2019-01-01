@@ -15,7 +15,7 @@ public class GeneticAlgorithm {
 	private int pressure;
 	private int nElite;
 	
-	public GeneticAlgorithm(DataStructure data, int numThreads, String outputfile, int numPopulation, int nElite, int pressure) {
+	public GeneticAlgorithm(DataStructure data, String outputfile, int numPopulation, int nElite, int pressure) {
 		this.data = data;
 		this.bestSolutions = new LinkedList<>();
 		this.bestObjectiveFunction = Integer.MIN_VALUE;

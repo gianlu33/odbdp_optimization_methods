@@ -39,7 +39,7 @@ public class MainClass {
 		if(time > 60) numThreads += (time - 60) / 20;
 		if(numThreads > 64) numThreads = 64;
 
-		GeneticAlgorithm ga = new GeneticAlgorithm(data, numThreads, outputfile, numPopulation, nElite, pressure);
+		GeneticAlgorithm ga = new GeneticAlgorithm(data, outputfile, numPopulation, nElite, pressure);
 		
 		//time in millis
 		time *= 1000;

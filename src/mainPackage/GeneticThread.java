@@ -1,14 +1,14 @@
 package mainPackage;
 
 public class GeneticThread extends Thread {
-	private GeneticAlgorithm genetic;
+	private GeneticAlgorithm ga;
 	
-	public GeneticThread( GeneticAlgorithm genetic) {
-		this.genetic = genetic;
+	public GeneticThread( GeneticAlgorithm ga) {
+		this.ga = ga;
 	}
 	@Override
 	public void run() {
 		super.run();
-		genetic.start();
+		ga.start();
 	}
 }
