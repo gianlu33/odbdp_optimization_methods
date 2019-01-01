@@ -95,16 +95,6 @@ public class Solution {
 		return Float.compare(b.fitness, a.fitness);
 	}
 	
-	public static int compare2(Solution a, Solution b) {
-		if(a.feasible == b.feasible)
-			return Float.compare(b.fitness, a.fitness);
-		
-		if(a.feasible)
-			return -1;
-		
-		return 1;
-	}
-	
 	public String toString() {
 		StringBuffer sb = new StringBuffer();
 		

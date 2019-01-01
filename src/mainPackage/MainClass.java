@@ -1,6 +1,5 @@
 package mainPackage;
 
-import java.util.ArrayList;
 
 public class MainClass {
 
@@ -21,37 +20,48 @@ public class MainClass {
 			System.exit(-1);
 		}
 		
-		Utils.readData(data, args[0]);
-		
 		String outputfile = args[0] + "_OMAMZ_group02.sol";
 		
+		//parameters for genetic algorithm
 		int numPopulation = 50;
 		int nElite = 5;
-		int pressure = numPopulation / 20;
-
-		int numThreads = 6;
-		if(time > 30) numThreads += (time - 30) / 10;
-		if(numThreads > 64) numThreads = 64;
-				
-		MultiThreadGenetic multi = new MultiThreadGenetic(data, numThreads, outputfile, time, numPopulation, nElite, pressure);
-		ArrayList<GeneticThread> threads = new ArrayList<>();
+		int pressure = 2;
 		
+		//start now
+		long timeStart = System.currentTimeMillis();
+		
+		//reading data from file
+		Utils.readData(data, args[0]);
+		
+		//number of threads, depends of time given (min. 6 - max. 64)
+		//starting from 6 threads, if time is higher than 1 minute i add a thread every 20 seconds
+		int numThreads = 6;
+		if(time > 60) numThreads += (time - 60) / 20;
+		if(numThreads > 64) numThreads = 64;
+
+		MultiThreadGenetic multi = new MultiThreadGenetic(data, numThreads, outputfile, numPopulation, nElite, pressure);
+		
+		//time in millis
+		time *= 1000;
+
+		//start all the threads
+		GeneticThread thread;
 		for(int i=0; i<numThreads; i++) {
-			GeneticThread thread = new GeneticThread(i, multi);
-			threads.add(thread);
+			thread = new GeneticThread(multi);
 			thread.start();
 		}
 		
-		for(int i=0; i<numThreads; i++) {
-			try {
-				GeneticThread thread = threads.get(i);
-				thread.join();
-			}catch(Exception e) {
-				System.out.println("FATAL ERROR WITH THREADS");
-				System.exit(-1);
+		while(true) {
+			
+			if(System.currentTimeMillis() - timeStart >= time) {
+				System.exit(multi.getObjectiveFunction());
 			}
-		}
-		
-		System.exit(multi.getObjectiveFunction());
+			
+			try {
+				Thread.sleep(500);
+			}catch(Exception e) {}
+			
+		}	
 	}
+	
 }

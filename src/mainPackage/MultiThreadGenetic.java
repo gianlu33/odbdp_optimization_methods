@@ -1,70 +1,52 @@
 package mainPackage;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.Random;
 
 public class MultiThreadGenetic {
 	private DataStructure data;
-	private ArrayList<ArrayList<Solution>> populationThreads;
-	private ArrayList<ArrayList<Solution>> childrenThreads;
 	private int bestObjectiveFunction;
 	private float bestFitness;
 	private Queue<Solution> bestSolutions;
-	private int timeMillis;
-	private long timeStart;
 	private String outputfile;
 	private int numPopulation;
 	private int pressure;
 	private int nElite;
 	
-	public MultiThreadGenetic(DataStructure data, int numThreads, String outputfile, int time,  int numPopulation, int nElite, int pressure) {
+	public MultiThreadGenetic(DataStructure data, int numThreads, String outputfile, int numPopulation, int nElite, int pressure) {
 		this.data = data;
-		this.populationThreads = new ArrayList<>();
-		this.childrenThreads = new ArrayList<>();
 		this.bestSolutions = new LinkedList<>();
-
-		for(int i=0; i<numThreads; i++) {
-			populationThreads.add(new ArrayList<>());
-			childrenThreads.add(new ArrayList<>());
-		}
-		
 		this.bestObjectiveFunction = Integer.MIN_VALUE;
 		this.bestFitness = Float.MIN_VALUE;
 		this.outputfile = outputfile;
 		this.numPopulation = numPopulation;
 		this.pressure = pressure;
 		this.nElite = nElite;
-		
-		this.timeMillis = time * 1000;
-		this.timeStart = System.currentTimeMillis();
 	}
 	
-	public void start(int numThread) {
+	public void start() {
 		int generation = 1;
 		int pressureThread = pressure;
 		
-		ArrayList<Solution> population = populationThreads.get(numThread);
-		ArrayList<Solution> children = childrenThreads.get(numThread);
+		ArrayList<Solution> population = new ArrayList<>();
+		ArrayList<Solution> children = new ArrayList<>();
 		ArrayList<Solution> temp;
 		Solution s1, s2, sChild;
 		float similarity;
 		int mutationRate;
 		
 		//initial population
-		generatePopulation(population, numThread, numPopulation, nElite);
+		generatePopulation(population);
 
-		while(System.currentTimeMillis() - timeStart < timeMillis) {
-			Collections.sort(population, Solution::compare);
-			
+		while(true) {			
 			//elitism -> SAVE THE BEST SOLUTIONS FOUND SO FAR
 			children.addAll(bestSolutions);
 			
-			//crossover, mutation, ls
+			//crossover, mutation, local search to populate children
 			for(int i=0; i<numPopulation-nElite; i++) {
-				//selection -> TOURNAMENT SELECTION FOR COMBINATION
+				//Tournament selection
 				s1 = tournamentSelection(population, pressureThread);
 				s2 = tournamentSelection(population, pressureThread);
 				
@@ -78,10 +60,15 @@ public class MultiThreadGenetic {
 				boolean[] child = crossover(s1, s2);
 				mutation(child, mutationRate);
 				sChild = Utils.generateSolutionFromIndexes(data, child);
-				checkAndSaveBestSolution(sChild, numThread, nElite);
+				
+				if(sChild.isFeasible() && sChild.getObjectiveFunction() > bestObjectiveFunction)
+					printBestSolution(sChild);
+				
+				if(sChild.getFitness() > bestFitness)
+					insertInBestSolutions(sChild);
 				
 				//local search
-				firstImprovement(sChild, numThread, nElite);
+				firstImprovement(sChild);
 				
 				//add to children
 				children.add(sChild);
@@ -95,12 +82,13 @@ public class MultiThreadGenetic {
 			
 			generation++;
 			
-			if(generation % 2 == 0)
-				pressureThread = pressureThread >= numPopulation / 5 ? numPopulation / 5 : pressureThread + 1;
+			//increase pressure over generations
+			if(generation % 3 == 0 && pressureThread < 10)
+				pressureThread++;
 		}	
 	}
 	
-	private void generatePopulation(ArrayList<Solution> population, int numThread, int numPopulation, int nElite) {
+	private void generatePopulation(ArrayList<Solution> population) {
 		boolean[] tempIndexes;
 		Solution tempSolution;
 		
@@ -111,38 +99,40 @@ public class MultiThreadGenetic {
 			
 			//add new solution to population
 			tempSolution = Utils.generateSolutionFromIndexes(data, tempIndexes);
-			firstImprovement(tempSolution, numThread, nElite);
+			firstImprovement(tempSolution);
 			population.add(tempSolution);
 		}
 		
 	}
 	
 	/*
-	 * Method that checks if a solution is the best found so far.
-	 * If it is, write this solution to output file
+	 * print best solution to output file.
 	 */
-	private synchronized void checkAndSaveBestSolution(Solution s, int numThread, int nElite) {
-		int objectiveFunction = s.getObjectiveFunction();
-		float fitness = s.getFitness();
-		int[][] matrix = s.getMatrix();
-		
-		//add solution to bestSolutions
-		if(fitness > bestFitness) {
-			bestFitness = fitness;
+	private synchronized void printBestSolution(Solution s) {
+			int objectiveFunction = s.getObjectiveFunction();
 			
-			bestSolutions.add(s);
-			if(bestSolutions.size() > nElite)
-				bestSolutions.remove();
-		}
-	
-		if(!s.isFeasible()) return;
-		
-		if(objectiveFunction > bestObjectiveFunction) {
+			//check of feasibility not necessary because it is checked before calling this method
+			if(objectiveFunction <= bestObjectiveFunction) return;
+			
 			bestObjectiveFunction = objectiveFunction;
 			
 			//write to output file
-			Utils.writeOutput(matrix, outputfile);
-		}
+			Utils.writeOutput(s.getMatrix(), outputfile);
+	}
+	
+	/*
+	 * insert solution in bestSolution queue
+	 */
+	private synchronized void insertInBestSolutions(Solution s) {
+		float fitness = s.getFitness();
+		
+		if(fitness <= bestFitness) return;
+		
+		bestFitness = fitness;
+		
+		bestSolutions.add(s);
+		if(bestSolutions.size() > nElite)
+			bestSolutions.remove();
 	}
 	
 	/*
@@ -152,17 +142,21 @@ public class MultiThreadGenetic {
 	 * Population list is ordered, so the best individual is the one with lowest index
 	 */
 	private Solution tournamentSelection(ArrayList<Solution> population, int pressure) {
-		int best = -1, temp;
 		Random rand = new Random();
+		Solution temp, best = null;
+		float bestFitness = Float.MIN_VALUE, tempFitness;
 		
 		for(int i=0; i<pressure; i++) {
-			temp = rand.nextInt(population.size());
+			temp = population.get(rand.nextInt(numPopulation));
+			tempFitness = temp.getFitness();
 			
-			if(best == -1 || temp < best)
+			if(tempFitness > bestFitness) {
+				bestFitness = tempFitness;
 				best = temp;
+			}
 		}
 		
-		return population.get(best);
+		return best;
 	}
 
 	private float checkSimilarity(Solution parent1, Solution parent2) {
@@ -187,7 +181,6 @@ public class MultiThreadGenetic {
 
 	/*
 	 * Uniform Crossover
-	 * Try to have only a child.
 	 */
 	private boolean[] crossover(Solution s1, Solution s2) {
 		Random rand = new Random();
@@ -197,20 +190,23 @@ public class MultiThreadGenetic {
 
 		int nIndexes = parent1.length;
 		boolean[] child1 = new boolean[nIndexes];
+		boolean[] child2 = new boolean[nIndexes];
 		
 		for(int i=0; i<nIndexes; i++) {
 			
 			if(rand.nextBoolean()) {
 				//swap
 				child1[i] = parent2[i];
+				child2[i] = parent1[i];
 			}
 			else {
 				//no swap
 				child1[i] = parent1[i];
+				child2[i] = parent2[i];
 			}
 		}
 
-		return child1;
+		return rand.nextInt(2) == 0 ? child1 : child2;
 	}
 	
 	/*
@@ -236,7 +232,7 @@ public class MultiThreadGenetic {
 	 * if the new fitness is better, then jump to this solution
 	 * iterate until i can't improve anymore my fitness
 	 */
-	private void firstImprovement(Solution child, int numThread, int nElite) {
+	private void firstImprovement(Solution child) {
 		int nIndexes = data.getnIndexes();
 		boolean[] indexes;
 		Solution tempSolution, bestSolution = child;
@@ -257,7 +253,13 @@ public class MultiThreadGenetic {
 				tempSolution = Utils.generateSolutionFromIndexes(data, indexes);
 				tempFitness = tempSolution.getFitness();
 				
-				checkAndSaveBestSolution(tempSolution, numThread, nElite);
+				//if this solution has the best fitness, insert in bestSolutions queue
+				if(tempFitness > this.bestFitness)
+					insertInBestSolutions(tempSolution);
+				
+				//if this solution is the best feasible one, write to output file
+				if(tempSolution.isFeasible() && tempSolution.getObjectiveFunction() > bestObjectiveFunction)
+					printBestSolution(tempSolution);
 				
 				if(tempFitness > bestFitness) {
 					bestFitness = tempFitness;

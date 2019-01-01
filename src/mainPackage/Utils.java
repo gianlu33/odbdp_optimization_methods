@@ -4,7 +4,6 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.FileReader;
 import java.io.FileWriter;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -158,12 +157,9 @@ public class Utils {
 			
 			bw.close();
 			
-		} catch (IOException e) {
-			e.printStackTrace();
-		} catch (NumberFormatException e) {
-			e.printStackTrace();
 		} catch (Exception e) {
-			e.printStackTrace();
+			System.out.println("IO error in writing output file");
+			System.exit(-1);
 		}
 	}
 	
@@ -186,22 +182,26 @@ public class Utils {
 	}
 	
 	/*
-	 * Generate a random set of activated indexes.
-	 * This set provides a solution (maybe non feasible)
-	 * for each index, i activate this index with probability 5/nIndexes
+	 * Generate an array of random indexes
+	 * Compute the average number of indexes to be activated in order to reach memory limit
+	 * activate each index with probability avgIndexes / nIndexes
 	 */
 	public static boolean[] generateRandomIndexes(DataStructure data){
 		int nIndexes = data.getnIndexes();
 		int memory = data.getMaximumMemory();
 		
+		//compute sum of weights
 		int[] weights = data.getIndexesMemory();
 		int sumMemory = 0;
 		for(int i=0; i<nIndexes; i++)
 			sumMemory += weights[i];
 		
+		//compute average memory per index
 		int avgMemory = sumMemory / nIndexes;
+		//compute number of indexes to be activated in order to reach memory limit
 		int avgIndexes = memory / avgMemory;
 		
+		//compute probability (for random)
 		int probability = nIndexes / avgIndexes;
 		
 		Random rand = new Random();
@@ -224,9 +224,7 @@ public class Utils {
 	 * 2 - for each query, assign the best configuration in terms of gain, from the list built before
 	 * 
 	 * 3 - recompute the indexes array (because i could have not used all the indexes)
-	 * 		and calculate the objective function and the total memory used * 
-	 * 
-	 * It is very easy and fast finding this solution.
+	 * 		and calculate the objective function and the total memory used 
 	 */
 	public static Solution generateSolutionFromIndexes(DataStructure data, boolean[] indexes){
 		int totalGain = 0, totalMemory = 0, totalCost = 0, bestConfig, bestGain, gain;
