@@ -27,7 +27,6 @@ public class GeneticAlgorithm {
 	}
 	
 	public void start() {
-		int generation = 1;
 		int pressureThread = pressure;
 		ArrayList<Solution> population = new ArrayList<>();
 		ArrayList<Solution> children = new ArrayList<>();
@@ -81,10 +80,8 @@ public class GeneticAlgorithm {
 			children = temp;
 			children.clear();
 			
-			generation++;
-			
 			//increase pressure over generations
-			if(generation % 3 == 0 && pressureThread < 10)
+			if(pressureThread < 10)
 				pressureThread++;
 		}	
 	}
