@@ -39,7 +39,7 @@ public class MainClass {
 		if(time > 60) numThreads += (time - 60) / 20;
 		if(numThreads > 64) numThreads = 64;
 
-		MultiThreadGenetic multi = new MultiThreadGenetic(data, numThreads, outputfile, numPopulation, nElite, pressure);
+		GeneticAlgorithm ga = new GeneticAlgorithm(data, numThreads, outputfile, numPopulation, nElite, pressure);
 		
 		//time in millis
 		time *= 1000;
@@ -47,14 +47,14 @@ public class MainClass {
 		//start all the threads
 		GeneticThread thread;
 		for(int i=0; i<numThreads; i++) {
-			thread = new GeneticThread(multi);
+			thread = new GeneticThread(ga);
 			thread.start();
 		}
 		
 		while(true) {
 			
 			if(System.currentTimeMillis() - timeStart >= time) {
-				System.exit(multi.getObjectiveFunction());
+				System.exit(ga.getObjectiveFunction());
 			}
 			
 			try {

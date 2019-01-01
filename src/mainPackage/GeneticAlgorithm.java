@@ -5,7 +5,7 @@ import java.util.LinkedList;
 import java.util.Queue;
 import java.util.Random;
 
-public class MultiThreadGenetic {
+public class GeneticAlgorithm {
 	private DataStructure data;
 	private int bestObjectiveFunction;
 	private float bestFitness;
@@ -15,7 +15,7 @@ public class MultiThreadGenetic {
 	private int pressure;
 	private int nElite;
 	
-	public MultiThreadGenetic(DataStructure data, int numThreads, String outputfile, int numPopulation, int nElite, int pressure) {
+	public GeneticAlgorithm(DataStructure data, int numThreads, String outputfile, int numPopulation, int nElite, int pressure) {
 		this.data = data;
 		this.bestSolutions = new LinkedList<>();
 		this.bestObjectiveFunction = Integer.MIN_VALUE;

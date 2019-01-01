@@ -1,9 +1,9 @@
 package mainPackage;
 
 public class GeneticThread extends Thread {
-	private MultiThreadGenetic genetic;
+	private GeneticAlgorithm genetic;
 	
-	public GeneticThread( MultiThreadGenetic genetic) {
+	public GeneticThread( GeneticAlgorithm genetic) {
 		this.genetic = genetic;
 	}
 	@Override
