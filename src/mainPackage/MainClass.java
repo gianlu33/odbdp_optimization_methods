@@ -15,7 +15,7 @@ public class MainClass {
 		try {
 			time = Integer.parseInt(args[2]);
 		}catch(NumberFormatException e) {
-			System.out.println("timelimit must be numeric!");
+			System.out.println("timelimit must be an integer!");
 			System.out.println("Usage: java -jar jarfile.jar instancefilename -t timelimit");
 			System.exit(-1);
 		}
